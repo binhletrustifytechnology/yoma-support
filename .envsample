@@ -1,4 +1,19 @@
-EMAIL_SENDER="quangbinh1100@gmail.com"
+# ── send_email.py ─────────────────────────────────────────────────────────────
+EMAIL_SENDER="you@gmail.com"
 EMAIL_PASSWORD="**** **** **** ****"
-#EMAIL_RECEIVER="emoney@zeyalabs.ai"
-EMAIL_RECEIVER="quangbinh1100@gmail.com"
+EMAIL_RECEIVER="recipient@example.com"
+
+# ── n8n ───────────────────────────────────────────────────────────────────────
+N8N_HOST=localhost
+N8N_PROTOCOL=http
+WEBHOOK_URL=http://localhost:5678/
+N8N_BASIC_AUTH_USER=admin
+N8N_BASIC_AUTH_PASSWORD=secret
+N8N_ENCRYPTION_KEY=change_me_to_a_random_secret
+
+# ── Gmail OAuth2 (for n8n Gmail Trigger) ─────────────────────────────────────
+# Create credentials at: https://console.cloud.google.com/apis/credentials
+# App type: Web application
+# Authorized redirect URI: http://localhost:5678/rest/oauth2-credential/callback
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

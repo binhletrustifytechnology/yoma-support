@@ -1,0 +1,300 @@
+{
+  "name": "Disbursement Email Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "q": "subject:(salary disbursement) OR subject:(disbursement) OR subject:(SalaryToMA) OR subject:(salary)"
+        },
+        "options": {
+          "downloadAttachments": true,
+          "attachmentsPrefix": "attachment_",
+          "dataPropertyAttachmentsPrefixName": "attachment_"
+        }
+      },
+      "id": "node-gmail-trigger",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1",
+          "name": "Gmail OAuth2 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-subject-salary",
+              "leftValue": "={{ $json.subject }}",
+              "rightValue": "salary",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cond-subject-disbursement",
+              "leftValue": "={{ $json.subject }}",
+              "rightValue": "disbursement",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cond-body-salarytoma",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "SalaryToMA",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cond-body-mmk",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "MMK",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cond-body-wavemoney",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "Wave Money",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cond-body-disbursement",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "disbursement",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "node-filter-keywords",
+      "name": "Is Disbursement Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract structured disbursement data from email body\nconst item = $input.item.json;\nconst body = (item.text || item.snippet || '').trim();\nconst subject = item.subject || '';\nconst sender = item.from || '';\nconst date = item.date || new Date().toISOString();\n\n// ── Regex extractors ────────────────────────────────────────────────────────\n\n// Amount: e.g. \"25,000,000 MMK\" or \"Amount: 15,000,000 MMK\"\nconst amountMatch = body.match(/([\\d,]+(?:\\.\\d+)?)\\s*MMK/i)\n  || body.match(/Amount[:\\s]+([\\d,]+(?:\\.\\d+)?)/i);\nconst amount = amountMatch ? amountMatch[1].replace(/,/g, '') : null;\n\n// Company: e.g. \"Acme Innovations Inc\" or \"Company: XYZ Ltd\"\nconst companyMatch = body.match(/Company[:\\s]+([^\\n]+)/i)\n  || subject.match(/Salary Disbursement[\\s\\-–]+([^\\n]+)/i);\nconst company = companyMatch ? companyMatch[1].trim() : null;\n\n// Payroll period: e.g. \"February 1-15, 2024\" or \"Period: March 2024\"\nconst periodMatch = body.match(/(?:Payroll Period|Payment Period|Period)[:\\s]+([^\\n]+)/i)\n  || body.match(/(January|February|March|April|May|June|July|August|September|October|November|December)[^\\n,]*/i);\nconst period = periodMatch ? periodMatch[1].trim() : null;\n\n// Number of employees\nconst employeesMatch = body.match(/(?:Number of employees|Total employees|employees)[:\\s]+(\\d+)/i);\nconst employees = employeesMatch ? parseInt(employeesMatch[1]) : null;\n\n// Payment type\nconst paymentTypeMatch = body.match(/(?:Payment Type|Method|Disbursement Method)[:\\s]+([^\\n]+)/i)\n  || body.match(/(SalaryToMA|Direct Wallet Transfer|Bank Transfer)/i);\nconst paymentType = paymentTypeMatch ? paymentTypeMatch[1].trim() : null;\n\n// Approvers\nconst approverMatches = [...body.matchAll(/[-–]\\s+([^,\\n]+),\\s+[^—]+—\\s+Approved/gi)];\nconst approvers = approverMatches.map(m => m[1].trim());\n\n// Attachment info\nconst attachmentKeys = Object.keys(item).filter(k => k.startsWith('attachment_'));\nconst attachmentCount = attachmentKeys.length;\n\nreturn {\n  json: {\n    // Raw email metadata\n    messageId: item.id,\n    threadId: item.threadId,\n    subject,\n    sender,\n    date,\n    labels: item.labelIds || [],\n\n    // Extracted structured fields\n    disbursement: {\n      company,\n      amount_mmk: amount ? Number(amount) : null,\n      period,\n      employees,\n      payment_type: paymentType,\n      approvers: approvers.length ? approvers : null,\n    },\n\n    // Body content\n    body_text: body,\n    body_html: item.html || null,\n\n    // Attachment metadata\n    has_attachments: attachmentCount > 0,\n    attachment_count: attachmentCount,\n    attachment_keys: attachmentKeys,\n  },\n  // Pass through binary attachment data unchanged\n  binary: $input.item.binary || {},\n};\n"
+      },
+      "id": "node-extract-fields",
+      "name": "Extract Disbursement Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-attachments",
+              "leftValue": "={{ $json.has_attachments }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-check-attachments",
+      "name": "Has Attachments?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log and prepare email with attachments for downstream processing\nconst item = $input.item;\nconst json = item.json;\nconst binary = item.binary || {};\n\n// Build attachment summary\nconst attachments = json.attachment_keys.map(key => ({\n  key,\n  filename: binary[key]?.fileName || key,\n  mime_type: binary[key]?.mimeType || 'application/octet-stream',\n  size_bytes: binary[key]?.fileSize || null,\n}));\n\nconsole.log(`[Disbursement] Email with ${attachments.length} attachment(s) from: ${json.sender}`);\nconsole.log(`[Disbursement] Subject: ${json.subject}`);\nconsole.log(`[Disbursement] Attachments:`, attachments.map(a => a.filename).join(', '));\n\nreturn {\n  json: {\n    ...json,\n    attachments,\n    processing_status: 'extracted_with_attachments',\n    processed_at: new Date().toISOString(),\n  },\n  binary,\n};\n"
+      },
+      "id": "node-process-with-attachments",
+      "name": "Process With Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log and prepare email without attachments\nconst json = $input.item.json;\n\nconsole.log(`[Disbursement] Email (no attachments) from: ${json.sender}`);\nconsole.log(`[Disbursement] Subject: ${json.subject}`);\n\nreturn {\n  json: {\n    ...json,\n    attachments: [],\n    processing_status: 'extracted_body_only',\n    processed_at: new Date().toISOString(),\n  },\n};\n"
+      },
+      "id": "node-process-body-only",
+      "name": "Process Body Only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 280]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "node-merge",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1440, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final output: log the fully processed disbursement record\nconst json = $input.item.json;\n\nconsole.log('=== DISBURSEMENT RECORD ===');\nconsole.log(JSON.stringify({\n  subject: json.subject,\n  sender: json.sender,\n  date: json.date,\n  disbursement: json.disbursement,\n  has_attachments: json.has_attachments,\n  attachment_count: json.attachment_count,\n  status: json.processing_status,\n}, null, 2));\n\n// Return as-is for downstream nodes (webhook, database, Slack, etc.)\nreturn $input.item;\n"
+      },
+      "id": "node-output",
+      "name": "Output / Forward",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 180]
+    },
+    {
+      "parameters": {},
+      "id": "node-noop-filtered",
+      "name": "Not Disbursement (Skip)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [720, 460]
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is Disbursement Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Disbursement Email?": {
+      "main": [
+        [
+          {
+            "node": "Extract Disbursement Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Disbursement (Skip)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Disbursement Fields": {
+      "main": [
+        [
+          {
+            "node": "Has Attachments?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Attachments?": {
+      "main": [
+        [
+          {
+            "node": "Process With Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Body Only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process With Attachments": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Body Only": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Output / Forward",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}
