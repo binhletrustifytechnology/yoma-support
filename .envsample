@@ -11,9 +11,11 @@ N8N_BASIC_AUTH_USER=admin
 N8N_BASIC_AUTH_PASSWORD=secret
 N8N_ENCRYPTION_KEY=change_me_to_a_random_secret
 
-# ── Gmail OAuth2 (for n8n Gmail Trigger) ─────────────────────────────────────
-# Create credentials at: https://console.cloud.google.com/apis/credentials
-# App type: Web application
-# Authorized redirect URI: http://localhost:5678/rest/oauth2-credential/callback
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+# ── IMAP (for n8n Email Trigger) ─────────────────────────────────────────────
+# Gmail: enable IMAP in Settings → Forwarding and POP/IMAP
+# Use an App Password (Google Account → Security → App passwords)
+IMAP_HOST=imap.gmail.com
+IMAP_PORT=993
+IMAP_USER=you@gmail.com
+IMAP_PASSWORD=your_app_password
+IMAP_SSL=true
