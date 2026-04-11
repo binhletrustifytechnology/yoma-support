@@ -3,31 +3,23 @@
   "nodes": [
     {
       "parameters": {
-        "pollTimes": {
-          "item": [
-            {
-              "mode": "everyMinute"
-            }
-          ]
-        },
-        "filters": {
-          "q": "subject:(salary disbursement) OR subject:(disbursement) OR subject:(SalaryToMA) OR subject:(salary)"
-        },
+        "mailbox": "INBOX",
+        "postProcessAction": "read",
+        "downloadAttachments": true,
         "options": {
-          "downloadAttachments": true,
-          "attachmentsPrefix": "attachment_",
-          "dataPropertyAttachmentsPrefixName": "attachment_"
+          "allowUnauthorizedCerts": false,
+          "customEmailConfig": "[\"UNSEEN\"]"
         }
       },
-      "id": "node-gmail-trigger",
-      "name": "Gmail Trigger",
-      "type": "n8n-nodes-base.gmailTrigger",
-      "typeVersion": 1,
+      "id": "node-imap-trigger",
+      "name": "IMAP Trigger",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
       "position": [240, 300],
       "credentials": {
-        "gmailOAuth2": {
+        "imap": {
           "id": "1",
-          "name": "Gmail OAuth2 account"
+          "name": "IMAP account"
         }
       }
     },
@@ -106,13 +98,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract structured disbursement data from email body\nconst item = $input.item.json;\nconst body = (item.text || item.snippet || '').trim();\nconst subject = item.subject || '';\nconst sender = item.from || '';\nconst date = item.date || new Date().toISOString();\n\n// ── Regex extractors ────────────────────────────────────────────────────────\n\n// Amount: e.g. \"25,000,000 MMK\" or \"Amount: 15,000,000 MMK\"\nconst amountMatch = body.match(/([\\d,]+(?:\\.\\d+)?)\\s*MMK/i)\n  || body.match(/Amount[:\\s]+([\\d,]+(?:\\.\\d+)?)/i);\nconst amount = amountMatch ? amountMatch[1].replace(/,/g, '') : null;\n\n// Company: e.g. \"Acme Innovations Inc\" or \"Company: XYZ Ltd\"\nconst companyMatch = body.match(/Company[:\\s]+([^\\n]+)/i)\n  || subject.match(/Salary Disbursement[\\s\\-–]+([^\\n]+)/i);\nconst company = companyMatch ? companyMatch[1].trim() : null;\n\n// Payroll period: e.g. \"February 1-15, 2024\" or \"Period: March 2024\"\nconst periodMatch = body.match(/(?:Payroll Period|Payment Period|Period)[:\\s]+([^\\n]+)/i)\n  || body.match(/(January|February|March|April|May|June|July|August|September|October|November|December)[^\\n,]*/i);\nconst period = periodMatch ? periodMatch[1].trim() : null;\n\n// Number of employees\nconst employeesMatch = body.match(/(?:Number of employees|Total employees|employees)[:\\s]+(\\d+)/i);\nconst employees = employeesMatch ? parseInt(employeesMatch[1]) : null;\n\n// Payment type\nconst paymentTypeMatch = body.match(/(?:Payment Type|Method|Disbursement Method)[:\\s]+([^\\n]+)/i)\n  || body.match(/(SalaryToMA|Direct Wallet Transfer|Bank Transfer)/i);\nconst paymentType = paymentTypeMatch ? paymentTypeMatch[1].trim() : null;\n\n// Approvers\nconst approverMatches = [...body.matchAll(/[-–]\\s+([^,\\n]+),\\s+[^—]+—\\s+Approved/gi)];\nconst approvers = approverMatches.map(m => m[1].trim());\n\n// Attachment info\nconst attachmentKeys = Object.keys(item).filter(k => k.startsWith('attachment_'));\nconst attachmentCount = attachmentKeys.length;\n\nreturn {\n  json: {\n    // Raw email metadata\n    messageId: item.id,\n    threadId: item.threadId,\n    subject,\n    sender,\n    date,\n    labels: item.labelIds || [],\n\n    // Extracted structured fields\n    disbursement: {\n      company,\n      amount_mmk: amount ? Number(amount) : null,\n      period,\n      employees,\n      payment_type: paymentType,\n      approvers: approvers.length ? approvers : null,\n    },\n\n    // Body content\n    body_text: body,\n    body_html: item.html || null,\n\n    // Attachment metadata\n    has_attachments: attachmentCount > 0,\n    attachment_count: attachmentCount,\n    attachment_keys: attachmentKeys,\n  },\n  // Pass through binary attachment data unchanged\n  binary: $input.item.binary || {},\n};\n"
+        "jsCode": "// Extract structured disbursement data from email body (IMAP source)\nconst item = $input.item.json;\nconst body = (item.text || '').trim();\nconst subject = item.subject || '';\n\n// IMAP sender: { text: 'Name <email>', value: [{ address, name }] }\nconst sender = item.from?.text || item.from?.value?.[0]?.address || '';\nconst date = item.date || new Date().toISOString();\n\n// ── Regex extractors ────────────────────────────────────────────────────────\n\n// Amount: e.g. \"25,000,000 MMK\" or \"Amount: 15,000,000 MMK\"\nconst amountMatch = body.match(/([\\d,]+(?:\\.\\d+)?)\\s*MMK/i)\n  || body.match(/Amount[:\\s]+([\\d,]+(?:\\.\\d+)?)/i);\nconst amount = amountMatch ? amountMatch[1].replace(/,/g, '') : null;\n\n// Company: e.g. \"Company: XYZ Ltd\" or from subject line\nconst companyMatch = body.match(/Company[:\\s]+([^\\n]+)/i)\n  || subject.match(/Salary Disbursement[\\s\\-–]+([^\\n]+)/i);\nconst company = companyMatch ? companyMatch[1].trim() : null;\n\n// Payroll period\nconst periodMatch = body.match(/(?:Payroll Period|Payment Period|Period)[:\\s]+([^\\n]+)/i)\n  || body.match(/(January|February|March|April|May|June|July|August|September|October|November|December)[^\\n,]*/i);\nconst period = periodMatch ? periodMatch[1].trim() : null;\n\n// Number of employees\nconst employeesMatch = body.match(/(?:Number of employees|Total employees|employees)[:\\s]+(\\d+)/i);\nconst employees = employeesMatch ? parseInt(employeesMatch[1]) : null;\n\n// Payment type\nconst paymentTypeMatch = body.match(/(?:Payment Type|Method|Disbursement Method)[:\\s]+([^\\n]+)/i)\n  || body.match(/(SalaryToMA|Direct Wallet Transfer|Bank Transfer)/i);\nconst paymentType = paymentTypeMatch ? paymentTypeMatch[1].trim() : null;\n\n// Approvers\nconst approverMatches = [...body.matchAll(/[-–]\\s+([^,\\n]+),\\s+[^—]+—\\s+Approved/gi)];\nconst approvers = approverMatches.map(m => m[1].trim());\n\n// IMAP attachments: json.attachments is an array of { filename, contentType, size }\n// Binary data keys are automatically named attachment_0, attachment_1, etc.\nconst imapAttachments = item.attachments || [];\nconst attachmentKeys = Object.keys($input.item.binary || {}).filter(k => k.startsWith('attachment_'));\nconst attachmentCount = imapAttachments.length || attachmentKeys.length;\n\nreturn {\n  json: {\n    // Raw email metadata\n    messageId: item.messageId || item.uid,\n    subject,\n    sender,\n    date,\n\n    // Extracted structured fields\n    disbursement: {\n      company,\n      amount_mmk: amount ? Number(amount) : null,\n      period,\n      employees,\n      payment_type: paymentType,\n      approvers: approvers.length ? approvers : null,\n    },\n\n    // Body content\n    body_text: body,\n    body_html: item.html || null,\n\n    // Attachment metadata\n    has_attachments: attachmentCount > 0,\n    attachment_count: attachmentCount,\n    attachment_keys: attachmentKeys,\n    imap_attachments: imapAttachments.map(a => ({\n      filename: a.filename,\n      content_type: a.contentType,\n      size_bytes: a.size,\n    })),\n  },\n  binary: $input.item.binary || {},\n};\n"
       },
       "id": "node-extract-fields",
       "name": "Extract Disbursement Fields",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [720, 180]
+      "position": [720, 180],
+      "notes": "IMAP data: sender is from.text, attachments array is json.attachments"
     },
     {
       "parameters": {
@@ -194,7 +187,7 @@
     }
   ],
   "connections": {
-    "Gmail Trigger": {
+    "IMAP Trigger": {
       "main": [
         [
           {
