@@ -19,9 +19,11 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-secret}
       # Encryption key for stored credentials (set a strong random value)
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-change_me_to_a_random_secret}
-      # Gmail OAuth2 app credentials (create at console.cloud.google.com)
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # IMAP credentials (passed through to n8n credential setup)
+      - IMAP_HOST=${IMAP_HOST:-imap.gmail.com}
+      - IMAP_PORT=${IMAP_PORT:-993}
+      - IMAP_USER=${IMAP_USER:-}
+      - IMAP_PASSWORD=${IMAP_PASSWORD:-}
     volumes:
       - n8n_data:/home/node/.n8n
 
