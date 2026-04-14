@@ -67,3 +67,6 @@ $ kubectl rollout restart deployment/n8n-worker -n n8n
 
 $ kubectl describe pod <POD-NAME> -n n8n
 $ kubectl logs <POD-NAME> --previous
+
+
+$ kubectl port-forward svc/n8n 5678:5678
