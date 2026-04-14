@@ -55,7 +55,7 @@ spec:
             - name: DB_POSTGRESDB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
+                  name: n8n-secret
                   key: DB_POSTGRESDB_PASSWORD
           volumeMounts:
             - name: data
